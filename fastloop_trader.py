@@ -685,8 +685,20 @@ def run_fast_market_strategy(dry_run=True, positions_only=False, show_config=Fal
 # =============================================================================
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Simmer FastLoop Trading Skill")
+    parser.add_argument("--live", action="store_true", help="Execute real trades (default is dry-run)")
+    parser.add_argument("--dry-run", action="store_true", help="(Default) Show opportunities without trading")
+    parser.add_argument("--positions", action="store_true", help="Show current fast market positions")
+    parser.add_argument("--config", action="store_true", help="Show current config")
+    parser.add_argument("--set", action="append", metavar="KEY=VALUE",
+                        help="Update config (e.g., --set entry_threshold=0.08)")
+    parser.add_argument("--smart-sizing", action="store_true", help="Use portfolio-based position sizing")
+    parser.add_argument("--quiet", "-q", action="store_true",
+                        help="Only output on trades/errors (ideal for high-frequency runs)")
+    args = parser.parse_args()
 
-        if DEMO_MODE:
+    # ---------------- DEMO MODE (pretty console output) ----------------
+    if DEMO_MODE:
         print("🚀 FastLoop Trader — Multi Asset Sprint Scan")
         print("⚡ Automated Momentum Execution Engine")
         print("=" * 72)
@@ -752,20 +764,7 @@ if __name__ == "__main__":
         print("  • Strategy: Momentum + Fast Market Divergence")
         print("=" * 72)
         sys.exit(0)
-
-
-
-    parser = argparse.ArgumentParser(description="Simmer FastLoop Trading Skill")
-    parser.add_argument("--live", action="store_true", help="Execute real trades (default is dry-run)")
-    parser.add_argument("--dry-run", action="store_true", help="(Default) Show opportunities without trading")
-    parser.add_argument("--positions", action="store_true", help="Show current fast market positions")
-    parser.add_argument("--config", action="store_true", help="Show current config")
-    parser.add_argument("--set", action="append", metavar="KEY=VALUE",
-                        help="Update config (e.g., --set entry_threshold=0.08)")
-    parser.add_argument("--smart-sizing", action="store_true", help="Use portfolio-based position sizing")
-    parser.add_argument("--quiet", "-q", action="store_true",
-                        help="Only output on trades/errors (ideal for high-frequency runs)")
-    args = parser.parse_args()
+    # ------------------------------------------------------------------
 
     if args.set:
         updates = {}
@@ -788,7 +787,7 @@ if __name__ == "__main__":
                 print(f"Unknown config key: {key}")
                 print(f"Valid keys: {', '.join(CONFIG_SCHEMA.keys())}")
                 sys.exit(1)
-        result = _update_config(updates, __file__)
+        _update_config(updates, __file__)
         print(f"✅ Config updated: {json.dumps(updates)}")
         sys.exit(0)
 
