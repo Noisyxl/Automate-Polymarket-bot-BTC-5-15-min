@@ -20,6 +20,7 @@ import sys
 import json
 import math
 import argparse
+DEMO_MODE = os.getenv("DEMO_MODE") == "true"
 from datetime import datetime, timezone, timedelta
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
@@ -684,6 +685,17 @@ def run_fast_market_strategy(dry_run=True, positions_only=False, show_config=Fal
 # =============================================================================
 
 if __name__ == "__main__":
+
+    if DEMO_MODE:
+        print("🚀 BTC SCAN MODE ACTIVE")
+        print("📈 Fetching BTC price signal...")
+        print("Price: $97,234.50 (was $96,812.30)")
+        print("Momentum: +0.82%")
+        print("YES price: $0.48")
+        print("Expected fair: ~$0.55")
+        print("💰 Buying YES $5.00")
+        sys.exit(0)
+
     parser = argparse.ArgumentParser(description="Simmer FastLoop Trading Skill")
     parser.add_argument("--live", action="store_true", help="Execute real trades (default is dry-run)")
     parser.add_argument("--dry-run", action="store_true", help="(Default) Show opportunities without trading")
