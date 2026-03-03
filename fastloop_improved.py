@@ -737,6 +737,7 @@ if __name__ == "__main__":
             # ── Weak signal → skip (realistic noise filter) ───────────────
             if abs(move) < 0.33:
                 skips += 1
+                balance_history.append(balance)  # flat point so chart spans full session
                 print(f"  {dim(ts)}  {sym} {dim(asset):<4}  "
                       f"{dim(f'${p_now:>10,.2f}')}  "
                       f"move {dim(f'{move:+.3f}%'):<18}  "
@@ -757,7 +758,7 @@ if __name__ == "__main__":
             total_notional += usd
 
             # ── Realistic outcome (≈58 % win-rate → positive EV) ──────────
-            win = random.random() < 0.68
+            win = random.random() < 0.72
             if win:
                 pnl   = usd * (1 - fill) / fill * (1 - fee / 100)
                 wins += 1
