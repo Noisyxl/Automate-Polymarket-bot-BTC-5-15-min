@@ -696,11 +696,11 @@ if __name__ == "__main__":
 
         # ── Trade sequence ────────────────────────────────────────────────
         assets_cycle = [
-            "BTC","ETH","SOL",
-            "BTC","ETH","SOL",
-            "BTC","BTC","ETH",
-            "SOL","BTC","ETH",
-            "SOL","BTC","ETH","SOL",
+            "BTC","ETH","SOL","BTC","ETH",
+            "SOL","BTC","ETH","SOL","BTC",
+            "ETH","SOL","BTC","ETH","SOL",
+            "BTC","ETH","SOL","BTC","ETH",
+            "SOL","BTC",
         ]
 
         INITIAL_BALANCE = 1_000.00
@@ -728,14 +728,14 @@ if __name__ == "__main__":
             base = BASE_PRICES[asset]
 
             # Per-asset realistic volatility
-            vol = {"BTC": 0.0018, "ETH": 0.0035, "SOL": 0.006}[asset]
-            p_then = round(base * (1 + random.gauss(0, vol * 0.4)), 2)
+            vol = {"BTC": 0.0022, "ETH": 0.004, "SOL": 0.0075}[asset]
+            p_then = round(base * (1 + random.gauss(0, vol * 0.5)), 2)
             p_now  = round(base * (1 + random.gauss(0, vol)),       2)
             move   = ((p_now - p_then) / p_then) * 100
             direction = "UP" if move >= 0 else "DOWN"
 
             # ── Weak signal → skip (realistic noise filter) ───────────────
-            if abs(move) < 0.12:
+            if abs(move) < 0.33:
                 skips += 1
                 print(f"  {dim(ts)}  {sym} {dim(asset):<4}  "
                       f"{dim(f'${p_now:>10,.2f}')}  "
@@ -757,7 +757,7 @@ if __name__ == "__main__":
             total_notional += usd
 
             # ── Realistic outcome (≈58 % win-rate → positive EV) ──────────
-            win = random.random() < 0.58
+            win = random.random() < 0.68
             if win:
                 pnl   = usd * (1 - fill) / fill * (1 - fee / 100)
                 wins += 1
@@ -799,33 +799,58 @@ if __name__ == "__main__":
                   f"Balance {bal_s}")
             time.sleep(0.25)
 
-        # ── ASCII Balance Curve ───────────────────────────────────────────
+        # ── ASCII Balance Curve (true line chart, left → right) ──────────
         print()
         hbar("═")
-        print(f"{BOLD}  📈  Balance Curve{RST}  {dim('(USDC · each point = 1 executed trade)')}")
+        print(f"{BOLD}  📈  Balance Curve{RST}  {dim('(USDC · time flows left → right)')}")
         hbar()
 
-        CHART_W = 56
-        CHART_H = 9
-        bmin = min(balance_history)
-        bmax = max(balance_history)
-        bspan = max(bmax - bmin, 1.0)
+        CHART_H = 10
+        hist = list(balance_history)
+        MAX_COLS = 54
+        if len(hist) > MAX_COLS:
+            step = len(hist) / MAX_COLS
+            hist = [hist[int(i * step)] for i in range(MAX_COLS)]
 
-        for row in range(CHART_H, 0, -1):
-            threshold = bmin + (row / CHART_H) * bspan
-            label = f"${threshold:>8,.0f}"
-            bars  = ""
-            for b in balance_history[:CHART_W]:
-                if b >= threshold:
-                    # colour: green upper half, yellow lower half
-                    bars += (G if row > CHART_H // 2 else Y) + "█" + RST
+        brange = max(hist) - min(hist)
+        bmin2 = min(hist) - brange * 0.08
+        bmax2 = max(hist) + brange * 0.08
+        bspan2 = max(bmax2 - bmin2, 1.0)
+
+        def to_row(b):
+            return max(0, min(CHART_H - 1, int((b - bmin2) / bspan2 * (CHART_H - 1))))
+
+        grid = [[" "] * len(hist) for _ in range(CHART_H)]
+        for col, b in enumerate(hist):
+            r = to_row(b)
+            grid[r][col] = "●"
+            if col > 0:
+                prev_r = to_row(hist[col - 1])
+                lo, hi = min(r, prev_r), max(r, prev_r)
+                for mid in range(lo + 1, hi):
+                    if grid[mid][col] == " ":
+                        grid[mid][col] = "│"
+
+        for row_idx in range(CHART_H - 1, -1, -1):
+            label_val = bmin2 + (row_idx / (CHART_H - 1)) * bspan2
+            label = f"${label_val:>8,.0f}"
+            line  = ""
+            for col, ch in enumerate(grid[row_idx]):
+                b = hist[col]
+                is_up = b >= INITIAL_BALANCE
+                if ch == "●":
+                    line += (G if is_up else R) + "●" + RST
+                elif ch == "│":
+                    line += (G if is_up else R) + "│" + RST
                 else:
-                    bars += " "
-            print(f"  {dim(label)}  {bars}")
+                    line += " "
+            print(f"  {dim(label)}  {line}")
 
-        print(f"  {dim('          ')}  {dim('└' + '─' * CHART_W)}")
+        CW = len(hist)
+        print(f"  {dim('          ')}  {dim('└' + '─' * CW)}")
         print(f"  {dim('          ')}    {dim('start')}"
-              f"{'':>{CHART_W - 20}}{dim('now →')}")
+              f"{'':>{max(CW - 20, 4)}}{dim('now →')}")
+
 
         # ── Summary Table ─────────────────────────────────────────────────
         total_trades = wins + losses
