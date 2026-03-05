@@ -589,10 +589,13 @@ def run_fast_market_strategy(dry_run=True, positions_only=False, show_config=Fal
     position_size = calculate_position_size(api_key, MAX_POSITION_USD, smart_sizing)
     price = market_yes_price if side == "yes" else (1 - market_yes_price)
 
+    # Shares validation: ensure position covers the Polymarket minimum order
     if price > 0:
-        min_cost = MIN_SHARES_PER_ORDER * price
-        if min_cost > position_size:
-            log(f"  ⚠️  Position ${position_size:.2f} too small for {MIN_SHARES_PER_ORDER} shares at ${price:.2f}")
+        shares_to_buy = position_size / price
+        if shares_to_buy < MIN_SHARES_PER_ORDER:
+            min_cost = MIN_SHARES_PER_ORDER * price
+            log(f"  ⚠️  ${position_size:.2f} buys only {shares_to_buy:.1f} shares @ ${price:.3f} "
+                f"(min {MIN_SHARES_PER_ORDER} shares = ${min_cost:.2f} required)")
             return
 
     log(f"  ✅ Signal: {side.upper()} — {trade_rationale}{vol_note}", force=True)
@@ -609,7 +612,7 @@ def run_fast_market_strategy(dry_run=True, positions_only=False, show_config=Fal
 
     if dry_run:
         est_shares = position_size / price if price > 0 else 0
-        log(f"  [DRY RUN] Would buy {side.upper()} ${position_size:.2f} (~{est_shares:.1f} shares)", force=True)
+        log(f"  [DRY RUN] Would buy {side.upper()} ${position_size:.2f} (~{est_shares:.1f} shares @ ${price:.3f})", force=True)
     else:
         log(f"  Executing {side.upper()} trade for ${position_size:.2f}...", force=True)
         result = execute_trade(api_key, market_id, side, position_size)
@@ -663,7 +666,7 @@ if __name__ == "__main__":
 
     # ──────────────────────────────────────────────────────────────────────────
     # DEMO MODE  –  realistic live-terminal simulation for README / presentation
-    # Run with:  DEMO_MODE=true python fastloop_improved.py
+    # Run with:  DEMO_MODE=true python fast_trader.py
     # ──────────────────────────────────────────────────────────────────────────
     if DEMO_MODE:
         import time
@@ -704,6 +707,9 @@ if __name__ == "__main__":
         ]
 
         INITIAL_BALANCE = 1_840.00
+        # Polymarket fast market fee: 2% (20 bps) — applied to winnings only
+        FEE_PCT = 0.02
+
         balance         = INITIAL_BALANCE
         balance_history = [balance]
         total_notional  = 0.0
@@ -748,24 +754,46 @@ if __name__ == "__main__":
             # ── Market odds ───────────────────────────────────────────────
             yes_p = round(random.uniform(0.37, 0.63), 2)
             no_p  = round(1 - yes_p, 2)
-            fee   = 10   # Polymarket 5-min fee %
 
             # ── Order ─────────────────────────────────────────────────────
+            # side determines which outcome we buy
             side   = "YES" if direction == "UP" else "NO"
+            # fill price: what we pay per share
             fill   = yes_p if side == "YES" else no_p
             usd    = random.choice([8, 10, 12, 15])
+
+            # Shares = USD spent / price per share
+            # Each share pays out $1.00 if correct outcome wins
             shares = usd / fill if fill > 0 else 0
+
+            # Enforce minimum shares check (Polymarket requires >= 5 shares)
+            if shares < MIN_SHARES_PER_ORDER:
+                skips += 1
+                balance_history.append(balance)
+                print(f"  {dim(ts)}  {sym} {dim(asset):<4}  "
+                      f"{dim(f'${p_now:>10,.2f}')}  "
+                      f"move {dim(f'{move:+.3f}%'):<18}  "
+                      f"{dim(f'⏸  ${usd} buys {shares:.1f} shares < min {MIN_SHARES_PER_ORDER} — skip')}")
+                time.sleep(0.10)
+                continue
+
             total_notional += usd
 
-            # ── Realistic outcome (≈58 % win-rate → positive EV) ──────────
-            win = random.random() < 0.72
+            # ── Realistic outcome (≈58% win-rate → slight positive EV) ────
+            # Win rate reflects edge from momentum signal, not coin flip
+            win = random.random() < 0.58
             if win:
-                pnl   = usd * (1 - fill) / fill * (1 - fee / 100)
+                # Win: each share pays $1.00
+                # Gross profit = shares * (1.00 - fill) = shares paid back minus cost
+                # Net profit after 2% Polymarket fee on winnings
+                gross_profit = shares * (1.0 - fill)          # profit before fee
+                pnl   = gross_profit * (1.0 - FEE_PCT)        # deduct fee from profit only
                 wins += 1
                 badge = green("✔  WIN ")
                 pnl_s = green(f"+${pnl:.2f}")
             else:
-                pnl    = -usd * fill
+                # Loss: forfeit entire stake (shares expire worthless)
+                pnl    = -usd
                 losses += 1
                 badge  = red("✘  LOSS")
                 pnl_s  = red(f"-${abs(pnl):.2f}")
@@ -791,7 +819,7 @@ if __name__ == "__main__":
                   f"move {move_s}")
             print(f"  {'':10}  "
                   f"Odds  YES {cyan(str(yes_p))}  /  NO {cyan(str(no_p))}    "
-                  f"Fee {dim(str(fee)+'%')}    "
+                  f"Fee {dim(f'{FEE_PCT:.0%}')}    "
                   f"Signal {bold(direction)}")
             print(f"  {'':10}  "
                   f"Order  BUY {side_s}  ${usd:.2f}  "
